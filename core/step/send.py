@@ -63,12 +63,12 @@ class SendStep(BaseStep):
         if not segments or len(segments) <= 1:
             return StepResult()
 
-        # 是否启用“仅写入历史的单语保留”（只针对机器人/LLM 回复）
+        # 是否启用"仅写入历史的单语保留"（只针对机器人/LLM 回复）
         keep_index: Optional[int] = None
         if ctx.is_llm and self.cfg.history_single_lang:
             keep_index = self._choose_history_segment_index(segments)
 
-        logger.info(
+        logger.debug(
             "[MultiLangSplit] SendStep: "
             f"is_llm={ctx.is_llm}, history_single_lang={self.cfg.history_single_lang}, "
             f"history_keep_lang={self.cfg.history_keep_lang!r}, keep_index={keep_index}"
@@ -81,26 +81,46 @@ class SendStep(BaseStep):
                     for i, s in enumerate(segments)
                 ]
             )
-            logger.info(f"[MultiLangSplit] SendStep segments: {seg_brief}")
+            logger.debug(f"[MultiLangSplit] SendStep segments: {seg_brief}")
         except Exception as e:
             logger.warning(f"[MultiLangSplit] SendStep segments log failed: {e}")
 
-        logger.info(
+        logger.debug(
             f"[MultiLangSplit] 开始分段发送，共 {len(segments)} 段"
         )
+
+        # ===== 核心修复：修改 LLM 历史，仅保留选中语言的文本 =====
+        # AstrBot 的对话历史从 LLMResponse.completion_text 保存，
+        # 而不是从 result.chain 保存。所以必须直接修改 LLMResponse 对象。
+        if keep_index is not None:
+            llm_resp = getattr(ctx.event, "__llm_resp", None)  # 由 on_llm_response 保存
+            if llm_resp is not None:
+                keep_text_for_history = segments[keep_index].text
+                try:
+                    llm_resp.completion_text = keep_text_for_history
+                    logger.debug(
+                        f"[MultiLangSplit] 已修改 LLM 历史，仅保留 "
+                        f"lang={segments[keep_index].lang}, "
+                        f"len={len(keep_text_for_history)}"
+                    )
+                except Exception as e:
+                    logger.warning(f"[MultiLangSplit] 修改 LLM 历史失败: {e}")
+            else:
+                logger.debug(
+                    "[MultiLangSplit] 未找到 __llm_resp，无法修改 LLM 历史"
+                )
 
         # 清空原始消息链
         result = ctx.event.get_result()
         result.chain.clear()
 
-        # 发送策略（满足你的要求）：
+        # 发送策略：
         # 1) 用户看到的顺序保持与 segments 一致
-        # 2) 仅 keep_index 对应的分段写入 result.chain（用于进入对话历史/上下文）
+        # 2) 仅 keep_index 对应的分段写入 result.chain（由框架发送）
         #
-        # 说明：框架发送发生在装饰完成之后。
-        # - keep_index 之前的段：在这里手动发送
-        # - keep_index 这段：放到 result.chain 交给框架发送（并写入历史）
-        # - keep_index 之后的段：用后台 task 在框架发送后继续手动发送，确保顺序
+        # - keep_index 之前的段：手动发送
+        # - keep_index 这段：放到 result.chain 交给框架发送
+        # - keep_index 之后的段：后台 task 在框架发送后继续手动发送
 
         if keep_index is None:
             keep_index = len(segments) - 1

@@ -128,8 +128,14 @@ class MultiLanguageSplitPlugin(Star):
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, resp: LLMResponse):
-        """当 LLM 产生回复时打标记，供管道判断是否为 LLM 消息。"""
+        """当 LLM 产生回复时打标记，并保存 LLMResponse 引用。
+
+        保存引用的目的：SendStep 在分段后可以直接修改
+        resp.completion_text，使 LLM 对话历史只保留一种语言的文本。
+        """
         setattr(event, "__is_llm_reply", True)
+        # 保存 LLMResponse 引用，供 SendStep 修改历史文本
+        setattr(event, "__llm_resp", resp)
 
     @filter.on_decorating_result()
     async def on_decorating_result(self, event: AstrMessageEvent):
@@ -148,7 +154,7 @@ class MultiLanguageSplitPlugin(Star):
             return
 
         is_llm = getattr(event, "__is_llm_reply", False)
-        logger.info(
+        logger.debug(
             f"[MultiLangSplit] on_decorating_result: is_llm={is_llm}, raw_len={len(raw_text)}"
         )
 
