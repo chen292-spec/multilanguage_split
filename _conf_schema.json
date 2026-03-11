@@ -1,0 +1,33 @@
+{
+    "delay": {
+        "description": "分段发送延迟（秒）",
+        "hint": "每条消息之间的等待时间，模拟打字效果。设为0则无延迟连续发送。",
+        "type": "float",
+        "default": 1.0
+    },
+    "enable_reply": {
+        "description": "第一条消息是否引用原消息",
+        "hint": "开启后，分段发送的第一条消息会引用用户发送的原始消息。",
+        "type": "bool",
+        "default": true
+    },
+    "split_inline_emoji": {
+        "description": "是否拆分文本行末尾的emoji",
+        "hint": "开启后，像『你好世界😊✨』会被拆为『你好世界』和『😊✨』两条消息。关闭则只按行分割。",
+        "type": "bool",
+        "default": true
+    },
+    "enable_langdetect": {
+        "description": "是否启用 langdetect 语言检测库",
+        "hint": "开启后支持全球55种语言识别（需要安装: pip install langdetect）。关闭后回退到Unicode检测，仅能区分文字系统（中/日/韩/拉丁/西里尔/阿拉伯）。",
+        "type": "bool",
+        "default": true
+    },
+    "split_scope": {
+        "description": "分段作用范围",
+        "hint": "llm_only: 只对大模型(LLM)生成的回复进行多语言分段; all: 对所有消息都进行分段（包括其他插件的回复）。",
+        "type": "string",
+        "options": ["llm_only", "all"],
+        "default": "llm_only"
+    }
+}
