@@ -28,9 +28,18 @@ class PipelineConfig:
         # 提取英文 key：把 "clean(文本清洗)" 变成 "clean"
         self._steps: list = [name.split("(", 1)[0].strip() for name in raw_steps]
 
+        # 关键保底：如果没有配置任何步骤（首次加载/旧配置迁移），默认全部启用
+        if not self._steps:
+            self._steps = list(self.DEFAULT_ORDER)
+            logger.info("[MultiLangSplit] 未检测到步骤配置，已默认启用全部步骤")
+
         # 仅对 LLM 回复生效的步骤
         raw_llm_steps = data.get("llm_steps", [])
         self._llm_steps: list = [name.split("(", 1)[0].strip() for name in raw_llm_steps]
+
+        # 保底：如果 llm_steps 为空，默认所有步骤都仅对 LLM 生效
+        if not self._llm_steps:
+            self._llm_steps = list(self.DEFAULT_ORDER)
 
     def is_enabled(self, step_name: str) -> bool:
         """判断某个步骤是否被用户启用（勾选）。"""
@@ -115,6 +124,12 @@ class PluginConfig:
         参数：
             raw_config: AstrBot 传入的插件配置字典
         """
+        # 检测是否为 v1.x 旧配置格式（扁平结构，顶层有 delay/enable_reply 等）
+        is_old_format = "delay" in raw_config and "pipeline" not in raw_config
+        if is_old_format:
+            raw_config = self._migrate_v1_config(raw_config)
+            logger.info("[MultiLangSplit] 检测到 v1.x 旧配置，已自动迁移到 v2.0 格式")
+
         self.pipeline = PipelineConfig(raw_config.get("pipeline", {}))
         self.clean = CleanConfig(raw_config.get("clean", {}))
         self.detect = DetectConfig(raw_config.get("detect", {}))
@@ -122,3 +137,28 @@ class PluginConfig:
 
         enabled = [s for s in self.pipeline._steps]
         logger.info(f"[MultiLangSplit] 已启用步骤: {enabled}")
+
+    @staticmethod
+    def _migrate_v1_config(old: dict) -> dict:
+        """将 v1.x 的扁平配置迁移到 v2.0 的嵌套结构。
+
+        v1.x 格式（顶层）：delay, enable_reply, split_inline_emoji, enable_langdetect, split_scope
+        v2.0 格式（嵌套）：pipeline.steps, detect.enable_langdetect, send.delay 等
+        """
+        new: dict = {
+            # 管道配置：默认全部启用
+            "pipeline": {},
+            # 检测配置：从旧配置迁移
+            "detect": {
+                "enable_langdetect": old.get("enable_langdetect", True),
+                "split_inline_emoji": old.get("split_inline_emoji", True),
+            },
+            # 发送配置：从旧配置迁移
+            "send": {
+                "delay": old.get("delay", 1.0),
+                "enable_reply": old.get("enable_reply", True),
+            },
+            # 清洗配置：v1.x 没有，使用默认值
+            "clean": {},
+        }
+        return new
