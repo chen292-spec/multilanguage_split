@@ -106,6 +106,14 @@ class SendConfig:
             self.delay = 1.0
         # 第一条消息是否引用用户的原消息
         self.enable_reply: bool = bool(data.get("enable_reply", True))
+
+        # 仅写入历史时保留一种语言（用于减少后续上下文 token），不影响用户看到的多语言分段发送
+        self.history_single_lang: bool = bool(data.get("history_single_lang", False))
+        # 选择保留语言：
+        # - "auto": 自动选择占比最大的语言（排除 emoji）
+        # - 或者填写具体语言码/类型：en/de/fr/zh-cn/latin/chinese...
+        self.history_keep_lang: str = str(data.get("history_keep_lang", "auto")).strip() or "auto"
+
         # 合并转发长度阈值：单段文本超过此长度就用合并转发发送
         # 设为 0 表示禁用合并转发（所有段都直接发送）
         self.forward_threshold: int = int(data.get("forward_threshold", 500))

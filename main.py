@@ -4,9 +4,13 @@
 每个步骤可独立开关、自由调节顺序。
 """
 
+import asyncio
+import sys
+
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import AstrBotConfig, logger
+from astrbot.api.event import MessageChain
 from astrbot.api.message_components import Plain
 from astrbot.api.provider import LLMResponse
 
@@ -44,6 +48,59 @@ class MultiLanguageSplitPlugin(Star):
         """插件卸载时清理管道中的所有步骤。"""
         await self.pipeline.terminate()
         logger.info("[MultiLangSplit] 插件已卸载")
+
+    @filter.command("mls_install_langdetect")
+    async def install_langdetect(self, event: AstrMessageEvent):
+        """一键安装 langdetect（仅管理员可用）。
+
+        说明：
+        - 通过 sys.executable 调用当前 AstrBot 正在运行的 Python
+        - 用 python -m pip install langdetect 安装到“正确的环境”
+        - Docker/云服务器/本机均适用
+        """
+        if not event.is_admin():
+            await event.send(MessageChain([Plain("无权限：该指令仅管理员可用")]))
+            return
+
+        # 已安装则直接提示
+        try:
+            import langdetect  # noqa: F401
+            await event.send(MessageChain([Plain("langdetect 已安装，无需重复安装")]))
+            return
+        except Exception:
+            pass
+
+        await event.send(MessageChain([Plain("开始安装 langdetect，请稍等... ")]))
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "langdetect",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            out, _ = await proc.communicate()
+            output = (out or b"").decode("utf-8", errors="ignore")
+
+            if proc.returncode == 0:
+                await event.send(
+                    MessageChain(
+                        [Plain("安装完成：langdetect 已可用。建议在 WebUI 重载插件或重启 AstrBot。")]
+                    )
+                )
+            else:
+                # 输出太长会刷屏，这里截断显示最后一部分
+                tail = output[-1500:] if output else ""
+                await event.send(
+                    MessageChain(
+                        [Plain("安装失败（请检查网络/镜像源/权限）。日志末尾：\n" + tail)]
+                    )
+                )
+        except Exception as e:
+            await event.send(MessageChain([Plain(f"安装异常：{e}")]))
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, resp: LLMResponse):

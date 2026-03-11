@@ -41,6 +41,23 @@ class StepResult:
     data: Any = None
 
 
+@dataclass(slots=True)
+class Segment:
+    """带语言标签的分段。
+
+    lang:
+        语言代码或类型：
+        - langdetect 输出：en/de/fr/zh-cn/zh-tw...
+        - 兜底 Unicode 输出：chinese/japanese/korean/latin/...
+        - emoji/other
+    text:
+        该段文本
+    """
+
+    lang: str
+    text: str
+
+
 @dataclass
 class OutContext:
     """管道上下文对象。
@@ -59,4 +76,4 @@ class OutContext:
     chain: List[BaseMessageComponent]
     is_llm: bool
     plain: str
-    segments: List[str] = field(default_factory=list)
+    segments: List[Segment] = field(default_factory=list)

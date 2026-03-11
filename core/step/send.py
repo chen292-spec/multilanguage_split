@@ -15,7 +15,7 @@ from astrbot.api.event import MessageChain
 from astrbot.api.message_components import Plain, Reply
 
 from ..config import PluginConfig
-from ..model import OutContext, StepName, StepResult
+from ..model import OutContext, Segment, StepName, StepResult
 from .base import BaseStep
 
 # 合并转发需要的组件，可能不是所有环境都有
@@ -62,6 +62,11 @@ class SendStep(BaseStep):
         if not segments or len(segments) <= 1:
             return StepResult()
 
+        # 是否启用“仅写入历史的单语保留”（只针对机器人/LLM 回复）
+        keep_seg: Segment | None = None
+        if ctx.is_llm and self.cfg.history_single_lang:
+            keep_seg = self._choose_history_segment(segments)
+
         logger.info(
             f"[MultiLangSplit] 开始分段发送，共 {len(segments)} 段"
         )
@@ -70,27 +75,66 @@ class SendStep(BaseStep):
         result = ctx.event.get_result()
         result.chain.clear()
 
-        # 发送前 N-1 段
-        for i, seg_text in enumerate(segments[:-1]):
-            is_first = (i == 0)
-            await self._send_segment(ctx, seg_text, is_first)
+        # 发送策略：
+        # - keep_seg：不手动发送，交给框架正常发送（并进入对话历史/上下文）
+        # - 其他段：手动发送给用户
+        # 说明：框架发送发生在装饰完成之后，因此 keep_seg 会作为“最后一条”被框架发送。
+        first_sent = True
+        for seg in segments:
+            if keep_seg is not None and seg is keep_seg:
+                continue
+
+            await self._send_segment(ctx, seg.text, first_sent)
+            first_sent = False
             await asyncio.sleep(self.cfg.delay)
 
-        # 最后一段放回 result.chain，由框架正常发送（保留对话历史）
-        last_seg = segments[-1]
-        if self._should_forward(ctx, last_seg):
-            # 最后一段也需要转发时，包装为转发节点放回
-            node_comp = await self._build_forward_node(ctx, last_seg)
+        # 写回 result.chain：默认用最后一段；若启用单语保留且选到了 keep_seg，则只写入该段
+        final_seg = keep_seg or segments[-1]
+        final_text = final_seg.text
+        if self._should_forward(ctx, final_text):
+            node_comp = await self._build_forward_node(ctx, final_text)
             if node_comp:
                 result.chain.append(node_comp)
             else:
-                result.chain.append(Plain(last_seg))
+                result.chain.append(Plain(final_text))
         else:
-            result.chain.append(Plain(last_seg))
+            result.chain.append(Plain(final_text))
 
         return StepResult(
             msg=f"[MultiLangSplit] 分段发送完成，共 {len(segments)} 段"
         )
+
+    def _choose_history_segment(self, segments: list[Segment]) -> Segment:
+        """选择要写入对话历史的分段（用于减少后续上下文 token）。
+
+        规则：
+        - history_keep_lang == "auto": 选择占比最大的语言（按字符数），忽略 emoji
+        - 否则：选择最后一个匹配该语言的分段（避免过早截断上下文）
+        - 都找不到：回退到最后一段
+        """
+        keep_lang = (self.cfg.history_keep_lang or "auto").strip().lower()
+
+        if keep_lang == "auto":
+            score: dict[str, int] = {}
+            for seg in segments:
+                lang = (seg.lang or "other").lower()
+                if lang == "emoji":
+                    continue
+                score[lang] = score.get(lang, 0) + len(seg.text)
+            if score:
+                target = max(score, key=score.get)
+                for seg in reversed(segments):
+                    if (seg.lang or "").lower() == target:
+                        return seg
+            return segments[-1]
+
+        # 精确语言匹配：支持 zh / zh-cn 这种前缀匹配
+        for seg in reversed(segments):
+            lang = (seg.lang or "").lower()
+            if lang == keep_lang or lang.startswith(keep_lang + "-") or keep_lang.startswith(lang + "-"):
+                return seg
+
+        return segments[-1]
 
     async def _send_segment(
         self, ctx: OutContext, text: str, is_first: bool

@@ -126,6 +126,18 @@
         "type": "object",
         "hint": "对检测到的每个语言段独立判断：短段直接发送，长段合并转发",
         "items": {
+            "history_single_lang": {
+                "description": "仅写入历史保留一种语言",
+                "hint": "开启后：用户仍能看到多语言分段发送，但写入对话历史/上下文时只保留一种语言，从而减少后续对话的 token。仅对机器人(LLM)回复生效",
+                "type": "bool",
+                "default": false
+            },
+            "history_keep_lang": {
+                "description": "历史保留语言",
+                "hint": "当上面开关开启时生效。auto=自动选择占比最大的语言(忽略emoji)。也可以填具体语言码/类型：zh-cn、en、de、fr、latin、chinese 等",
+                "type": "string",
+                "default": "auto"
+            },
             "delay": {
                 "description": "分段发送延迟（秒）",
                 "hint": "每条消息之间的等待时间，模拟打字效果。设为 0 则无延迟",

@@ -22,7 +22,7 @@ except ImportError:
     LANGDETECT_AVAILABLE = False
 
 from ..config import PluginConfig
-from ..model import OutContext, StepName, StepResult
+from ..model import OutContext, Segment, StepName, StepResult
 from .base import BaseStep
 
 
@@ -66,13 +66,13 @@ class DetectStep(BaseStep):
 
     # ==================== 核心分段逻辑 ====================
 
-    def _split_by_language(self, text: str) -> List[str]:
+    def _split_by_language(self, text: str) -> List[Segment]:
         """将文本按语言类型分割成多个段落。
 
         流程：按行拆分 → 检测每行语言 → 合并连续同语言行
         """
         lines = text.split('\n')
-        classified_parts: List[Tuple[str, str]] = []
+        classified_parts: List[Segment] = []
 
         for line in lines:
             stripped = line.strip()
@@ -84,34 +84,34 @@ class DetectStep(BaseStep):
                 text_part, emoji_part = self._extract_trailing_emoji(stripped)
                 if text_part:
                     lang = self._detect_language(text_part)
-                    classified_parts.append((lang, text_part))
+                    classified_parts.append(Segment(lang=lang, text=text_part))
                 if emoji_part:
-                    classified_parts.append(("emoji", emoji_part))
+                    classified_parts.append(Segment(lang="emoji", text=emoji_part))
             else:
                 lang = self._detect_language(stripped)
-                classified_parts.append((lang, stripped))
+                classified_parts.append(Segment(lang=lang, text=stripped))
 
         if not classified_parts:
-            return [text]
+            return [Segment(lang="other", text=text)]
 
         # 合并连续相同语言的行
-        segments: List[str] = []
-        current_lang = classified_parts[0][0]
-        current_texts = [classified_parts[0][1]]
+        segments: List[Segment] = []
+        current_lang = classified_parts[0].lang
+        current_texts = [classified_parts[0].text]
 
-        for lang, line_text in classified_parts[1:]:
-            if lang == current_lang:
-                current_texts.append(line_text)
+        for part in classified_parts[1:]:
+            if part.lang == current_lang:
+                current_texts.append(part.text)
             else:
-                segments.append('\n'.join(current_texts))
-                current_lang = lang
-                current_texts = [line_text]
+                segments.append(Segment(lang=current_lang, text='\n'.join(current_texts)))
+                current_lang = part.lang
+                current_texts = [part.text]
 
         if current_texts:
-            segments.append('\n'.join(current_texts))
+            segments.append(Segment(lang=current_lang, text='\n'.join(current_texts)))
 
-        segments = [s for s in segments if s.strip()]
-        return segments if segments else [text]
+        segments = [s for s in segments if s.text.strip()]
+        return segments if segments else [Segment(lang="other", text=text)]
 
     # ==================== 语言检测 ====================
 
