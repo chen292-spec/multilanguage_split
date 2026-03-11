@@ -79,17 +79,21 @@ class DetectStep(BaseStep):
             if not stripped:
                 continue
 
-            # 拆分行末 emoji
+            # 始终尝试寻找句子末尾的 emoji
+            text_part, emoji_part = self._extract_trailing_emoji(stripped)
+            
+            # 如果配置要求拆分，则分离成两条 segment
             if self.cfg.split_inline_emoji:
-                text_part, emoji_part = self._extract_trailing_emoji(stripped)
                 if text_part:
                     lang = self._detect_language(text_part)
-                    classified_parts.append(Segment(lang=lang, text=text_part))
-                if emoji_part:
-                    classified_parts.append(Segment(lang="emoji", text=emoji_part))
+                    classified_parts.append(Segment(lang=lang, text=text_part, trailing_emoji=emoji_part))
+                elif emoji_part:
+                    # 如果只有表情，也存起来
+                    classified_parts.append(Segment(lang="emoji", text=emoji_part, trailing_emoji=emoji_part))
             else:
+                # 不要求分段发送，那么它属于同一个 Segment，但我们保留它提取的 emoji 以备发历史使用
                 lang = self._detect_language(stripped)
-                classified_parts.append(Segment(lang=lang, text=stripped))
+                classified_parts.append(Segment(lang=lang, text=stripped, trailing_emoji=emoji_part))
 
         if not classified_parts:
             return [Segment(lang="other", text=text)]
@@ -98,17 +102,23 @@ class DetectStep(BaseStep):
         segments: List[Segment] = []
         current_lang = classified_parts[0].lang
         current_texts = [classified_parts[0].text]
+        current_emojis = [classified_parts[0].trailing_emoji] if classified_parts[0].trailing_emoji else []
 
         for part in classified_parts[1:]:
             if part.lang == current_lang:
                 current_texts.append(part.text)
+                if part.trailing_emoji:
+                    current_emojis.append(part.trailing_emoji)
             else:
-                segments.append(Segment(lang=current_lang, text='\n'.join(current_texts)))
+                emoji_str = ' '.join(current_emojis) if current_emojis else ""
+                segments.append(Segment(lang=current_lang, text='\n'.join(current_texts), trailing_emoji=emoji_str))
                 current_lang = part.lang
                 current_texts = [part.text]
+                current_emojis = [part.trailing_emoji] if part.trailing_emoji else []
 
         if current_texts:
-            segments.append(Segment(lang=current_lang, text='\n'.join(current_texts)))
+            emoji_str = ' '.join(current_emojis) if current_emojis else ""
+            segments.append(Segment(lang=current_lang, text='\n'.join(current_texts), trailing_emoji=emoji_str))
 
         segments = [s for s in segments if s.text.strip()]
         return segments if segments else [Segment(lang="other", text=text)]

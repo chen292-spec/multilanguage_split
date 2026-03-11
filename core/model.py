@@ -56,7 +56,7 @@ class Segment:
 
     lang: str
     text: str
-
+    trailing_emoji: str = ""
 
 @dataclass
 class OutContext:

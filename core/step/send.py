@@ -99,6 +99,11 @@ class SendStep(BaseStep):
                 
                 # 如果配置项允许，将其后紧跟的表情/颜文字一并附加到历史记录中
                 if getattr(self.cfg, "history_include_emoji", True):
+                    # 1. 首先添加当前段落内置被保留的 trailing_emoji
+                    if hasattr(segments[keep_index], "trailing_emoji") and segments[keep_index].trailing_emoji:
+                        keep_text_for_history += " " + segments[keep_index].trailing_emoji
+                    
+                    # 2. 然后向后寻找被拆分出的连续独立 emoji 段落
                     extra_emojis = []
                     for i in range(keep_index + 1, len(segments)):
                         if (segments[i].lang or "").lower() == "emoji":
