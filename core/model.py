@@ -25,7 +25,7 @@ class StepName(str, Enum):
     SEND = "send"        # 智能发送：短段直发、长段合并转发
 
 
-@dataclass(slots=True)
+@dataclass
 class StepResult:
     """步骤执行结果。
 
@@ -41,7 +41,7 @@ class StepResult:
     data: Any = None
 
 
-@dataclass(slots=True)
+@dataclass
 class Segment:
     """带语言标签的分段。
 

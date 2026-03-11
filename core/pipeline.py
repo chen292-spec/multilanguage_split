@@ -8,6 +8,7 @@ Pipeline 是插件的中枢，负责：
 学习自 outputpro 的 Pipeline 设计。
 """
 
+from typing import List, Tuple, Type
 from astrbot.api import logger
 
 from .config import PluginConfig
@@ -24,7 +25,7 @@ class Pipeline:
     """
 
     # 内置默认顺序：步骤名 → 步骤类
-    STEP_REGISTRY: list[tuple[str, type[BaseStep]]] = [
+    STEP_REGISTRY: List[Tuple[str, Type[BaseStep]]] = [
         ("clean", CleanStep),      # 文本清洗
         ("detect", DetectStep),    # 多语言检测
         ("send", SendStep),        # 智能发送
@@ -33,7 +34,7 @@ class Pipeline:
     def __init__(self, config: PluginConfig):
         self.config = config
         self.cfg = config.pipeline
-        self._steps: list[BaseStep] = []
+        self._steps: List[BaseStep] = []
         self._build_steps()
 
     def _build_steps(self) -> None:

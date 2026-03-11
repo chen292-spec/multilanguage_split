@@ -21,7 +21,7 @@ from .core.pipeline import Pipeline
 
 @register("multilanguage_split", "chen292-spec",
           "多语言分段发送 - 文本清洗 → 多语言检测 → 智能发送(含合并转发)",
-          "2.0.0")
+          "2.0.1")
 class MultiLanguageSplitPlugin(Star):
     """多语言分段发送插件（管道架构 v2）。
 
@@ -82,7 +82,26 @@ class MultiLanguageSplitPlugin(Star):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            out, _ = await proc.communicate()
+            try:
+                out, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            except asyncio.TimeoutError:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=10)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                await event.send(
+                    MessageChain(
+                        [Plain("安装超时：已尝试终止 pip（可能网络较慢或镜像源不可用）。请稍后重试，或在控制台手动执行：\n" + f"{sys.executable} -m pip install langdetect")]
+                    )
+                )
+                return
             output = (out or b"").decode("utf-8", errors="ignore")
 
             if proc.returncode == 0:
@@ -92,11 +111,16 @@ class MultiLanguageSplitPlugin(Star):
                     )
                 )
             else:
-                # 输出太长会刷屏，这里截断显示最后一部分
-                tail = output[-1500:] if output else ""
+                # 输出太长会刷屏：展示“头 + 尾”，便于定位原因
+                if output and len(output) > 1800:
+                    head = output[:600]
+                    tail = output[-900:]
+                    show = head + "\n...（中间已省略）...\n" + tail
+                else:
+                    show = output or ""
                 await event.send(
                     MessageChain(
-                        [Plain("安装失败（请检查网络/镜像源/权限）。日志末尾：\n" + tail)]
+                        [Plain("安装失败（请检查网络/镜像源/权限）。日志：\n" + show)]
                     )
                 )
         except Exception as e:

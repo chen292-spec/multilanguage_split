@@ -9,6 +9,7 @@
 """
 
 import asyncio
+from typing import Dict, List, Optional
 
 from astrbot.api import logger
 from astrbot.api.event import MessageChain
@@ -63,9 +64,9 @@ class SendStep(BaseStep):
             return StepResult()
 
         # 是否启用“仅写入历史的单语保留”（只针对机器人/LLM 回复）
-        keep_seg: Segment | None = None
+        keep_index: Optional[int] = None
         if ctx.is_llm and self.cfg.history_single_lang:
-            keep_seg = self._choose_history_segment(segments)
+            keep_index = self._choose_history_segment_index(segments)
 
         logger.info(
             f"[MultiLangSplit] 开始分段发送，共 {len(segments)} 段"
@@ -75,36 +76,54 @@ class SendStep(BaseStep):
         result = ctx.event.get_result()
         result.chain.clear()
 
-        # 发送策略：
-        # - keep_seg：不手动发送，交给框架正常发送（并进入对话历史/上下文）
-        # - 其他段：手动发送给用户
-        # 说明：框架发送发生在装饰完成之后，因此 keep_seg 会作为“最后一条”被框架发送。
-        first_sent = True
-        for seg in segments:
-            if keep_seg is not None and seg is keep_seg:
-                continue
+        # 发送策略（满足你的要求）：
+        # 1) 用户看到的顺序保持与 segments 一致
+        # 2) 仅 keep_index 对应的分段写入 result.chain（用于进入对话历史/上下文）
+        #
+        # 说明：框架发送发生在装饰完成之后。
+        # - keep_index 之前的段：在这里手动发送
+        # - keep_index 这段：放到 result.chain 交给框架发送（并写入历史）
+        # - keep_index 之后的段：用后台 task 在框架发送后继续手动发送，确保顺序
 
-            await self._send_segment(ctx, seg.text, first_sent)
+        if keep_index is None:
+            keep_index = len(segments) - 1
+
+        # 先发送 keep_index 之前的段
+        first_sent = True
+        for i in range(0, keep_index):
+            await self._send_segment(ctx, segments[i].text, first_sent)
             first_sent = False
             await asyncio.sleep(self.cfg.delay)
 
-        # 写回 result.chain：默认用最后一段；若启用单语保留且选到了 keep_seg，则只写入该段
-        final_seg = keep_seg or segments[-1]
-        final_text = final_seg.text
-        if self._should_forward(ctx, final_text):
-            node_comp = await self._build_forward_node(ctx, final_text)
+        # 将 keep_index 对应段写回 result.chain，由框架发送并进入历史
+        keep_text = segments[keep_index].text
+        if self._should_forward(ctx, keep_text):
+            node_comp = await self._build_forward_node(ctx, keep_text)
             if node_comp:
+                # 第一条消息需要引用时，尽量在框架发送的这一条也加 Reply
+                if first_sent and self.cfg.enable_reply and ctx.event.message_obj.message_id:
+                    result.chain.append(Reply(id=ctx.event.message_obj.message_id))
                 result.chain.append(node_comp)
             else:
-                result.chain.append(Plain(final_text))
+                if first_sent and self.cfg.enable_reply and ctx.event.message_obj.message_id:
+                    result.chain.append(Reply(id=ctx.event.message_obj.message_id))
+                result.chain.append(Plain(keep_text))
         else:
-            result.chain.append(Plain(final_text))
+            if first_sent and self.cfg.enable_reply and ctx.event.message_obj.message_id:
+                result.chain.append(Reply(id=ctx.event.message_obj.message_id))
+            result.chain.append(Plain(keep_text))
+
+        # keep_index 之后的段：后台继续发，尽量保证发生在框架发送 keep 段之后
+        if keep_index < len(segments) - 1:
+            asyncio.create_task(
+                self._send_after_framework(ctx, segments, keep_index + 1)
+            )
 
         return StepResult(
             msg=f"[MultiLangSplit] 分段发送完成，共 {len(segments)} 段"
         )
 
-    def _choose_history_segment(self, segments: list[Segment]) -> Segment:
+    def _choose_history_segment_index(self, segments: List[Segment]) -> int:
         """选择要写入对话历史的分段（用于减少后续上下文 token）。
 
         规则：
@@ -115,7 +134,7 @@ class SendStep(BaseStep):
         keep_lang = (self.cfg.history_keep_lang or "auto").strip().lower()
 
         if keep_lang == "auto":
-            score: dict[str, int] = {}
+            score: Dict[str, int] = {}
             for seg in segments:
                 lang = (seg.lang or "other").lower()
                 if lang == "emoji":
@@ -123,18 +142,38 @@ class SendStep(BaseStep):
                 score[lang] = score.get(lang, 0) + len(seg.text)
             if score:
                 target = max(score, key=score.get)
-                for seg in reversed(segments):
-                    if (seg.lang or "").lower() == target:
-                        return seg
-            return segments[-1]
+                for i in range(len(segments) - 1, -1, -1):
+                    if (segments[i].lang or "").lower() == target:
+                        return i
+            return len(segments) - 1
 
         # 精确语言匹配：支持 zh / zh-cn 这种前缀匹配
-        for seg in reversed(segments):
-            lang = (seg.lang or "").lower()
-            if lang == keep_lang or lang.startswith(keep_lang + "-") or keep_lang.startswith(lang + "-"):
-                return seg
+        for i in range(len(segments) - 1, -1, -1):
+            lang = (segments[i].lang or "").lower()
+            if (
+                lang == keep_lang
+                or lang.startswith(keep_lang + "-")
+                or keep_lang.startswith(lang + "-")
+            ):
+                return i
 
-        return segments[-1]
+        return len(segments) - 1
+
+    async def _send_after_framework(
+        self, ctx: OutContext, segments: List[Segment], start_index: int
+    ) -> None:
+        """在框架发送 result.chain 之后继续发送剩余分段。
+
+        这里用 create_task + sleep(0) 尽量让发送顺序变成：
+        手动发送(keep 之前) -> 框架发送(keep) -> 手动发送(keep 之后)
+        """
+        try:
+            await asyncio.sleep(0)
+            for i in range(start_index, len(segments)):
+                await self._send_segment(ctx, segments[i].text, False)
+                await asyncio.sleep(self.cfg.delay)
+        except Exception as e:
+            logger.error(f"[MultiLangSplit] 发送后续分段失败: {e}")
 
     async def _send_segment(
         self, ctx: OutContext, text: str, is_first: bool

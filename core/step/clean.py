@@ -9,6 +9,7 @@
 
 import re
 from collections import defaultdict
+from typing import DefaultDict, Dict, List
 
 from astrbot.api.message_components import Plain
 
@@ -40,7 +41,7 @@ class CleanStep(BaseStep):
         """对消息链中的每个 Plain 组件执行文本清洗。"""
 
         # removed 记录每种清洗类型删除了什么（用于日志）
-        removed: dict[str, list[str]] = defaultdict(list)
+        removed: DefaultDict[str, List[str]] = defaultdict(list)
 
         for seg in ctx.chain:
             # 只处理纯文本组件
@@ -113,11 +114,11 @@ class CleanStep(BaseStep):
 
         return StepResult(msg=self._build_msg(removed))
 
-    def _build_msg(self, removed: dict[str, list[str]]) -> str:
+    def _build_msg(self, removed: Dict[str, List[str]]) -> str:
         """构建日志消息，记录清洗了什么内容。"""
         if not removed:
             return ""
-        parts: list[str] = []
+        parts: List[str] = []
         for k, items in removed.items():
             uniq = list(dict.fromkeys(items))
             if len(uniq) == 1:
