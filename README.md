@@ -67,10 +67,10 @@ pip install langdetect
 
 ## 致谢
 
-本插件的开发参考了以下项目，感谢作者们的开源贡献：
+本插件的开发参考了以下项目，感谢：
 
-- [astrbot_plugin_custome_segment_reply](https://github.com/LinJohn8/astrbot_plugin_custome_segment_reply) - 自定义分段回复插件
-- [astrbot_plugin_splitter](https://github.com/nuomicici/astrbot_plugin_splitter) - 消息分割插件
+- [astrbot_plugin_custome_segment_reply](https://github.com/LinJohn8/astrbot_plugin_custome_segment_reply) - 本地规则智能分段插件
+- [astrbot_plugin_splitter](https://github.com/nuomicici/astrbot_plugin_splitter) - 对话分段Pro
 
 ## 相关链接
 
