@@ -147,11 +147,16 @@ class MultiLanguageSplitPlugin(Star):
         if not raw_text:
             return
 
+        is_llm = getattr(event, "__is_llm_reply", False)
+        logger.info(
+            f"[MultiLangSplit] on_decorating_result: is_llm={is_llm}, raw_len={len(raw_text)}"
+        )
+
         # 构建管道上下文
         ctx = OutContext(
             event=event,
             chain=result.chain,
-            is_llm=getattr(event, "__is_llm_reply", False),
+            is_llm=is_llm,
             plain=raw_text,
         )
 

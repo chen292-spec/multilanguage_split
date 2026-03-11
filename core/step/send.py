@@ -69,6 +69,23 @@ class SendStep(BaseStep):
             keep_index = self._choose_history_segment_index(segments)
 
         logger.info(
+            "[MultiLangSplit] SendStep: "
+            f"is_llm={ctx.is_llm}, history_single_lang={self.cfg.history_single_lang}, "
+            f"history_keep_lang={self.cfg.history_keep_lang!r}, keep_index={keep_index}"
+        )
+
+        try:
+            seg_brief = ", ".join(
+                [
+                    f"{i}:{(s.lang or 'other')}({len(s.text)})"
+                    for i, s in enumerate(segments)
+                ]
+            )
+            logger.info(f"[MultiLangSplit] SendStep segments: {seg_brief}")
+        except Exception as e:
+            logger.warning(f"[MultiLangSplit] SendStep segments log failed: {e}")
+
+        logger.info(
             f"[MultiLangSplit] 开始分段发送，共 {len(segments)} 段"
         )
 
