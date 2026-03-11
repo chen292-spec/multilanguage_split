@@ -1,3 +1,4 @@
+from __future__ import annotations
 """智能发送步骤。
 
 消费 ctx.segments（由 detect 步骤生成），逐段发送：

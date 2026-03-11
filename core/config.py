@@ -1,3 +1,4 @@
+from __future__ import annotations
 """配置模块。
 
 将 AstrBot 的配置字典转换为强类型的 Python 对象，方便各步骤读取。

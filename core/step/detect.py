@@ -1,3 +1,4 @@
+from __future__ import annotations
 """多语言检测步骤。
 
 插件的核心逻辑：识别文本中的不同语言，拆分成多个段落。

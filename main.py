@@ -1,3 +1,4 @@
+from __future__ import annotations
 """多语言分段发送插件 - 入口文件。
 
 管道架构：clean(文本清洗) → detect(多语言检测) → send(智能发送)

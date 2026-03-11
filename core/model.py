@@ -1,3 +1,4 @@
+from __future__ import annotations
 """数据模型模块。
 
 定义管道中使用的核心数据结构：

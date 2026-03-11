@@ -1,3 +1,4 @@
+from __future__ import annotations
 """管道调度器模块。
 
 Pipeline 是插件的中枢，负责：
