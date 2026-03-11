@@ -113,6 +113,8 @@ class SendConfig:
         # - "auto": 自动选择占比最大的语言（排除 emoji）
         # - 或者填写具体语言码/类型：en/de/fr/zh-cn/latin/chinese...
         self.history_keep_lang: str = str(data.get("history_keep_lang", "auto")).strip() or "auto"
+        # 历史保留包含表情
+        self.history_include_emoji: bool = bool(data.get("history_include_emoji", True))
 
         # 合并转发长度阈值：单段文本超过此长度就用合并转发发送
         # 设为 0 表示禁用合并转发（所有段都直接发送）

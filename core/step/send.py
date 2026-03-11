@@ -96,6 +96,19 @@ class SendStep(BaseStep):
             llm_resp = getattr(ctx.event, "__llm_resp", None)  # 由 on_llm_response 保存
             if llm_resp is not None:
                 keep_text_for_history = segments[keep_index].text
+                
+                # 如果配置项允许，将其后紧跟的表情/颜文字一并附加到历史记录中
+                if getattr(self.cfg, "history_include_emoji", True):
+                    extra_emojis = []
+                    for i in range(keep_index + 1, len(segments)):
+                        if (segments[i].lang or "").lower() == "emoji":
+                            extra_emojis.append(segments[i].text)
+                        else:
+                            break
+                    if extra_emojis:
+                        # 用空格隔开，拼接到文本末尾
+                        keep_text_for_history += " " + " ".join(extra_emojis)
+
                 try:
                     llm_resp.completion_text = keep_text_for_history
                     logger.debug(

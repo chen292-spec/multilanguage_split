@@ -138,6 +138,12 @@
                 "type": "string",
                 "default": "auto"
             },
+            "history_include_emoji": {
+                "description": "历史记录包含 Emoji",
+                "hint": "开启后，如果文本被拆分了 Emoji/颜文字，将它们一并存入被保留的历史记录里上下文中。",
+                "type": "bool",
+                "default": true
+            },
             "delay": {
                 "description": "分段发送延迟（秒）",
                 "hint": "每条消息之间的等待时间，模拟打字效果。设为 0 则无延迟",
