@@ -1,6 +1,6 @@
 name: multilanguage_split                                    # 插件唯一识别名
 display_name: 多语言分段发送                                    # 显示名称（AstrBot v4.5.0+ 支持）
-desc: 支持全球55种语言自动识别并分对话框发送，emoji和颜文字也会单独发送  # 插件简短描述
-version: v1.2.0                                                # 插件版本号
+desc: 管道架构：文本清洗 → 多语言检测(55种语言) → 智能发送(含合并转发)，步骤可自由开关调节  # 插件简短描述
+version: v2.0.0                                                # 插件版本号
 author: chen292-spec                                           # 作者
 repo: https://github.com/chen292-spec/multilanguage_split      # 插件仓库地址

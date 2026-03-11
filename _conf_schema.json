@@ -1,33 +1,160 @@
 {
-    "delay": {
-        "description": "分段发送延迟（秒）",
-        "hint": "每条消息之间的等待时间，模拟打字效果。设为0则无延迟连续发送。",
-        "type": "float",
-        "default": 1.0
+    "pipeline": {
+        "description": "管道配置",
+        "type": "object",
+        "hint": "控制步骤的启停和执行顺序。管道默认顺序：文本清洗 → 多语言检测 → 智能发送",
+        "items": {
+            "lock_order": {
+                "description": "锁定步骤顺序",
+                "hint": "锁定后按内置顺序执行：文本清洗 → 多语言检测 → 智能发送。解锁后按列表顺序执行，可拖拽调整",
+                "type": "bool",
+                "default": true
+            },
+            "steps": {
+                "description": "启用的步骤",
+                "hint": "勾选表示启用该步骤；未锁定顺序时，将按当前列表顺序执行",
+                "type": "list",
+                "options": [
+                    "clean(文本清洗)",
+                    "detect(多语言检测)",
+                    "send(智能发送)"
+                ],
+                "default": [
+                    "clean(文本清洗)",
+                    "detect(多语言检测)",
+                    "send(智能发送)"
+                ]
+            },
+            "llm_steps": {
+                "description": "仅对 LLM 回复生效的步骤",
+                "hint": "勾选后，该步骤仅在 LLM 回复时生效，普通插件消息不会经过该步骤",
+                "type": "list",
+                "options": [
+                    "clean(文本清洗)",
+                    "detect(多语言检测)",
+                    "send(智能发送)"
+                ],
+                "default": [
+                    "clean(文本清洗)",
+                    "detect(多语言检测)",
+                    "send(智能发送)"
+                ]
+            }
+        }
     },
-    "enable_reply": {
-        "description": "第一条消息是否引用原消息",
-        "hint": "开启后，分段发送的第一条消息会引用用户发送的原始消息。",
-        "type": "bool",
-        "default": true
+    "clean": {
+        "description": "【文本清洗】",
+        "type": "object",
+        "hint": "在语言检测前清洗文本噪声。清洗顺序：中括号 → 小括号 → 情绪标签 → emoji → 句首 → 句尾 → 正则清洗",
+        "items": {
+            "text_threshold": {
+                "description": "清洗长度阈值",
+                "hint": "仅对此长度以下的文本执行清洗，防止误伤长文本。设为 0 则不限制",
+                "type": "int",
+                "slider": {
+                    "min": 0,
+                    "max": 1000,
+                    "step": 50
+                },
+                "default": 150
+            },
+            "bracket": {
+                "description": "摘除中括号内容",
+                "hint": "摘除 [...] 内容，如 [思考中]、[翻译]",
+                "type": "bool",
+                "default": true
+            },
+            "parenthesis": {
+                "description": "摘除小括号内容",
+                "hint": "摘除 (...) 内容，支持半角和全角括号。注意：可能误删有意义的括号内容",
+                "type": "bool",
+                "default": false
+            },
+            "emotion_tag": {
+                "description": "摘除情绪标签",
+                "hint": "摘除 &&...&& 格式的情绪标签，某些角色扮演模型会输出此格式",
+                "type": "bool",
+                "default": true
+            },
+            "emoji": {
+                "description": "清理 emoji",
+                "hint": "清理文本中的 emoji 表情。需要安装 emoji 库 (pip install emoji)",
+                "type": "bool",
+                "default": false
+            },
+            "lead": {
+                "description": "去除句首字符",
+                "hint": "对某些喜欢输出前缀的模型有用，只去除句首匹配的字符",
+                "type": "list",
+                "default": []
+            },
+            "tail": {
+                "description": "去除句尾字符",
+                "hint": "对某些喜欢输出句号的模型有用，只去除句尾匹配的字符",
+                "type": "list",
+                "default": []
+            },
+            "punctuation": {
+                "description": "正则清洗特殊符号",
+                "hint": "填写正则表达式，整句清洗匹配的字符。例如：[#%~]。留空则不清洗",
+                "type": "string",
+                "default": ""
+            }
+        }
     },
-    "split_inline_emoji": {
-        "description": "是否拆分文本行末尾的emoji",
-        "hint": "开启后，像『你好世界😊✨』会被拆为『你好世界』和『😊✨』两条消息。关闭则只按行分割。",
-        "type": "bool",
-        "default": true
+    "detect": {
+        "description": "【多语言检测】",
+        "type": "object",
+        "hint": "识别文本中的不同语言，拆分成多个段落",
+        "items": {
+            "enable_langdetect": {
+                "description": "启用 langdetect 语言检测",
+                "hint": "开启后支持 55 种语言识别（已内置自动安装）。关闭后回退到 Unicode 检测，仅能区分文字系统，无法区分英语和德语等",
+                "type": "bool",
+                "default": true
+            },
+            "split_inline_emoji": {
+                "description": "拆分行末 emoji",
+                "hint": "开启后，像『你好世界😊✨』会被拆为『你好世界』和『😊✨』两条消息",
+                "type": "bool",
+                "default": true
+            }
+        }
     },
-    "enable_langdetect": {
-        "description": "是否启用 langdetect 语言检测库",
-        "hint": "开启后支持全球55种语言识别（需要安装: pip install langdetect）。关闭后回退到Unicode检测，仅能区分文字系统（中/日/韩/拉丁/西里尔/阿拉伯）。",
-        "type": "bool",
-        "default": true
-    },
-    "split_scope": {
-        "description": "分段作用范围",
-        "hint": "llm_only: 只对大模型(LLM)生成的回复进行多语言分段; all: 对所有消息都进行分段（包括其他插件的回复）。",
-        "type": "string",
-        "options": ["llm_only", "all"],
-        "default": "llm_only"
+    "send": {
+        "description": "【智能发送】",
+        "type": "object",
+        "hint": "对检测到的每个语言段独立判断：短段直接发送，长段合并转发",
+        "items": {
+            "delay": {
+                "description": "分段发送延迟（秒）",
+                "hint": "每条消息之间的等待时间，模拟打字效果。设为 0 则无延迟",
+                "type": "float",
+                "default": 1.0
+            },
+            "enable_reply": {
+                "description": "引用原消息",
+                "hint": "开启后，第一条分段消息会引用用户发送的原始消息",
+                "type": "bool",
+                "default": true
+            },
+            "forward_threshold": {
+                "description": "合并转发长度阈值",
+                "hint": "单段文本超过此字符数时用合并转发发送（仅 aiocqhttp 平台）。设为 0 则禁用合并转发，所有段都直接发送",
+                "type": "int",
+                "slider": {
+                    "min": 0,
+                    "max": 2000,
+                    "step": 50
+                },
+                "default": 500
+            },
+            "forward_node_name": {
+                "description": "转发节点昵称",
+                "hint": "合并转发时显示的昵称，留空则自动获取 bot 昵称",
+                "type": "string",
+                "default": ""
+            }
+        }
     }
 }
