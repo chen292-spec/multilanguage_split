@@ -36,7 +36,7 @@
 ### v2.0.1
 
 - **一键安装依赖（管理员命令）**：新增指令 `mls_install_langdetect`，用于在 AstrBot 当前运行的 Python 环境中一键安装 `langdetect`（适配本机/云服务器/Docker）。如果插件安装阶段依赖未正确安装，可用此命令补装。
-- **仅写入历史保留一种语言（减少 token）**：新增配置 `send.history_single_lang` 与 `send.history_keep_lang`。
+- **上下文写入仅保留一种语言（减少 token）**：新增配置 `send.history_single_lang` 与 `send.history_keep_lang`。
   - 开启后：用户仍然能看到多语言分段发送，但写入对话历史/上下文时只保留指定语言，从而减少后续对话的输入 token。
   - `history_keep_lang` 支持：`auto`（自动选择占比最大的语言，忽略 emoji）或填写具体语言码/类型（如 `zh-cn`、`en`、`de`、`latin`、`chinese`）。
 
@@ -66,6 +66,8 @@ Die KI-Welt war in letzter Zeit recht lebhaft...（很长的德文段落）
 ```bash
 pip install langdetect
 ```
+
+或通过 /mls_install_langdetect 指令一键安装。
 
 未安装 `langdetect` 时仍可工作，但回退到 Unicode 检测，**无法区分同为拉丁字母的语言（如英语和德语）**。
 

@@ -108,7 +108,7 @@ class SendConfig:
         # 第一条消息是否引用用户的原消息
         self.enable_reply: bool = bool(data.get("enable_reply", True))
 
-        # 仅写入历史时保留一种语言（用于减少后续上下文 token），不影响用户看到的多语言分段发送
+        # 上下文写入仅保留一种语言（用于减少后续上下文 token），不影响用户看到的多语言分段发送
         self.history_single_lang: bool = bool(data.get("history_single_lang", False))
         # 选择保留语言：
         # - "auto": 自动选择占比最大的语言（排除 emoji）
